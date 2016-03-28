@@ -1,0 +1,48 @@
+{{$blue := env "BLUE_NAME"}}
+{{$green := env "GREEN_NAME"}}
+{{$live := file "/var/live"}}
+worker_processes  1;
+
+events {
+    worker_connections  1024;
+}
+
+http {
+	upstream blue {
+	    least_conn;
+	    {{range service $blue}}
+	    server {{.Address}}:{{.Port}} max_fails=3 fail_timeout=60 weight=1;{{else}}
+	    server 127.0.0.1:55000;{{end}}
+	}
+
+	upstream green {
+	    least_conn;
+	    {{range service $green}}
+	    server {{.Address}}:{{.Port}} max_fails=3 fail_timeout=60 weight=1;{{else}}
+	    server 127.0.0.1:55000;{{end}}
+	}
+
+	server {
+	    listen 80 default;
+
+	    location / {
+	    	{{if eq $live "blue"}}
+	        proxy_pass http://blue;
+	    	{{else}}
+	        proxy_pass http://green;
+	    	{{end}}
+	    }
+	}
+
+	server {
+	    listen 8080;
+
+	    location / {
+	    	{{if eq $live "blue"}}
+	        proxy_pass http://green;
+	    	{{else}}
+	        proxy_pass http://blue;
+	    	{{end}}
+	    }
+	}
+}
